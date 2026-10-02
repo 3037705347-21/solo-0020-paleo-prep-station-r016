@@ -18,6 +18,7 @@ func (s *Service) RegisterSpecimen(
 
 	var created domain.Specimen
 	err := s.repo.Mutate(func(m *repository.Mutation) error {
+		committedAt := s.now()
 		value, err := domain.NewSpecimen(
 			s.nextID("specimen"),
 			request.CatalogNumber,
@@ -25,7 +26,7 @@ func (s *Service) RegisterSpecimen(
 			request.TaxonHint,
 			request.MatrixKind,
 			request.JacketNotes,
-			s.now(),
+			committedAt,
 		)
 		if err != nil {
 			return err
@@ -34,6 +35,9 @@ func (s *Service) RegisterSpecimen(
 			return contracts.Conflict("duplicate_catalog_number", "目录号已存在，不能覆盖原标本")
 		}
 		m.PutSpecimen(value)
+		if err := s.recordEvent(m, value, domain.ActionSpecimenRegistered, nil, nil, nil, committedAt); err != nil {
+			return err
+		}
 		created = value
 		return nil
 	})

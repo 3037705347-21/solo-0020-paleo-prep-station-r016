@@ -32,6 +32,7 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 - `POST /plans/{id}/approval`
 - `POST /plans/{id}/progress`
 - `POST /specimens/{id}/release`
+- `GET /specimens/{id}/events` 与 `GET /plans/{id}/events`：按提交顺序读取不可覆盖的业务操作记录。
 
 ## 本地验证
 
@@ -52,4 +53,4 @@ go run ./cmd/workflowcheck --workflow release-for-study
 
 ## 测试边界
 
-本基线按要求暂不生成单元测试、测试夹具或端到端测试文件。后续任务阶段会补充红绿验证测试，届时再替换或扩展当前的生产级链路检查。
+当前包含操作记录能力的单元测试和 HTTP 路由测试（`go test ./...`），并继续保留四条生产级链路检查作为端到端烟雾路径。

@@ -19,6 +19,7 @@ func (s *Service) LogProgress(
 
 	var created domain.ProgressEntry
 	err := s.repo.Mutate(func(m *repository.Mutation) error {
+		committedAt := s.now()
 		plan, ok := m.GetPlan(planID)
 		if !ok {
 			return notFoundPlan(planID)
@@ -36,27 +37,30 @@ func (s *Service) LogProgress(
 			request.Percent,
 			request.Note,
 			request.RecordedBy,
-			s.now(),
+			committedAt,
 		)
 		if err != nil {
 			return err
 		}
 		if plan.Status == domain.PlanApproved {
-			if err := plan.Begin(s.now()); err != nil {
+			if err := plan.Begin(committedAt); err != nil {
 				return err
 			}
 		}
 		if request.Percent == 100 {
-			if err := plan.Complete(s.now()); err != nil {
+			if err := plan.Complete(committedAt); err != nil {
 				return err
 			}
-			if err := specimen.MarkStabilized(s.now()); err != nil {
+			if err := specimen.MarkStabilized(committedAt); err != nil {
 				return err
 			}
 		}
 		m.AppendProgress(entry)
 		m.PutPlan(plan)
 		m.PutSpecimen(specimen)
+		if err := s.recordEvent(m, specimen, domain.ActionProgressLogged, &plan, &entry, nil, committedAt); err != nil {
+			return err
+		}
 		created = entry
 		return nil
 	})

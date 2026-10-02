@@ -12,6 +12,7 @@ type state struct {
 	plans     map[string]domain.PrepPlan
 	progress  map[string][]domain.ProgressEntry
 	releases  map[string]domain.ReleaseRecord
+	events    []domain.OperationEvent
 }
 
 type MemoryRepository struct {
@@ -26,6 +27,7 @@ func NewMemory() *MemoryRepository {
 			plans:     make(map[string]domain.PrepPlan),
 			progress:  make(map[string][]domain.ProgressEntry),
 			releases:  make(map[string]domain.ReleaseRecord),
+			events:    make([]domain.OperationEvent, 0),
 		},
 	}
 }
@@ -67,6 +69,7 @@ func cloneMutation(source state) *Mutation {
 	for key, value := range source.releases {
 		copied.releases[key] = value
 	}
+	copied.events = append([]domain.OperationEvent(nil), source.events...)
 	return &Mutation{state: copied}
 }
 
@@ -163,4 +166,36 @@ func (m *Mutation) ReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, 
 
 func (m *Mutation) PutRelease(value domain.ReleaseRecord) {
 	m.state.releases[value.ID] = value
+}
+
+// AppendEvent commits a business change record onto the ordered log. The
+// sequence is assigned from the in-transaction log length, so sequences are
+// gapless and stay in commit order even when several events land at the same
+// timestamp. Events have no update or delete path.
+func (m *Mutation) AppendEvent(value domain.OperationEvent) domain.OperationEvent {
+	value.Sequence = len(m.state.events) + 1
+	m.state.events = append(m.state.events, value)
+	return value
+}
+
+// EventsForSpecimen returns the specimen's events in stable commit order.
+func (m *Mutation) EventsForSpecimen(specimenID string) []domain.OperationEvent {
+	values := make([]domain.OperationEvent, 0)
+	for _, value := range m.state.events {
+		if value.SpecimenID == specimenID {
+			values = append(values, value)
+		}
+	}
+	return values
+}
+
+// EventsForPlan returns the plan's events in stable commit order.
+func (m *Mutation) EventsForPlan(planID string) []domain.OperationEvent {
+	values := make([]domain.OperationEvent, 0)
+	for _, value := range m.state.events {
+		if value.PlanID == planID {
+			values = append(values, value)
+		}
+	}
+	return values
 }
