@@ -19,6 +19,7 @@ func (s *Service) CreatePlan(
 
 	var created domain.PrepPlan
 	err := s.repo.Mutate(func(m *repository.Mutation) error {
+		stamp := s.now()
 		specimen, ok := m.GetSpecimen(specimenID)
 		if !ok {
 			return notFoundSpecimen(specimenID)
@@ -33,16 +34,31 @@ func (s *Service) CreatePlan(
 			request.Method,
 			request.Adhesive,
 			request.TargetExposure,
-			s.now(),
+			stamp,
 		)
 		if err != nil {
 			return err
 		}
-		if err := specimen.MarkPlanned(s.now()); err != nil {
+		if err := specimen.MarkPlanned(stamp); err != nil {
+			return err
+		}
+		event, err := domain.NewOperationEvent(
+			s.nextID("event"),
+			domain.EventPlanCreated,
+			specimen.ID,
+			plan.ID,
+			stamp,
+			domain.EventResult{
+				SpecimenStatus: specimen.Status,
+				PlanStatus:     plan.Status,
+			},
+		)
+		if err != nil {
 			return err
 		}
 		m.PutPlan(plan)
 		m.PutSpecimen(specimen)
+		m.AppendEvent(event)
 		created = plan
 		return nil
 	})
@@ -60,6 +76,7 @@ func (s *Service) ApprovePlan(
 
 	var approved domain.PrepPlan
 	err := s.repo.Mutate(func(m *repository.Mutation) error {
+		stamp := s.now()
 		plan, ok := m.GetPlan(planID)
 		if !ok {
 			return notFoundPlan(planID)
@@ -68,14 +85,29 @@ func (s *Service) ApprovePlan(
 		if !ok {
 			return notFoundSpecimen(plan.SpecimenID)
 		}
-		if err := plan.Approve(request.ApprovedBy, s.now()); err != nil {
+		if err := plan.Approve(request.ApprovedBy, stamp); err != nil {
 			return err
 		}
-		if err := specimen.MarkPreparing(s.now()); err != nil {
+		if err := specimen.MarkPreparing(stamp); err != nil {
+			return err
+		}
+		event, err := domain.NewOperationEvent(
+			s.nextID("event"),
+			domain.EventPlanApproved,
+			specimen.ID,
+			plan.ID,
+			stamp,
+			domain.EventResult{
+				SpecimenStatus: specimen.Status,
+				PlanStatus:     plan.Status,
+			},
+		)
+		if err != nil {
 			return err
 		}
 		m.PutPlan(plan)
 		m.PutSpecimen(specimen)
+		m.AppendEvent(event)
 		approved = plan
 		return nil
 	})

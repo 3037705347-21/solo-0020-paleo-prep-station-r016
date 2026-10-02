@@ -19,6 +19,7 @@ func (s *Service) ReleaseSpecimen(
 
 	var created domain.ReleaseRecord
 	err := s.repo.Mutate(func(m *repository.Mutation) error {
+		stamp := s.now()
 		specimen, ok := m.GetSpecimen(specimenID)
 		if !ok {
 			return notFoundSpecimen(specimenID)
@@ -35,16 +36,31 @@ func (s *Service) ReleaseSpecimen(
 			request.Purpose,
 			request.Recipient,
 			request.ApprovedBy,
-			s.now(),
+			stamp,
 		)
 		if err != nil {
 			return err
 		}
-		if err := specimen.MarkAvailable(s.now()); err != nil {
+		if err := specimen.MarkAvailable(stamp); err != nil {
+			return err
+		}
+		event, err := domain.NewOperationEvent(
+			s.nextID("event"),
+			domain.EventSpecimenReleased,
+			specimen.ID,
+			"",
+			stamp,
+			domain.EventResult{
+				SpecimenStatus: specimen.Status,
+				ReleaseID:      record.ID,
+			},
+		)
+		if err != nil {
 			return err
 		}
 		m.PutRelease(record)
 		m.PutSpecimen(specimen)
+		m.AppendEvent(event)
 		created = record
 		return nil
 	})

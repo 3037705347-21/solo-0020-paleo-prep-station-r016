@@ -27,11 +27,15 @@ go run ./cmd/paleo-prep-station --addr 127.0.0.1:18133
 
 - `GET /specimens` 与 `POST /specimens`
 - `GET /specimens/{id}`
+- `GET /specimens/{id}/events`
 - `POST /specimens/{id}/plans`
 - `GET /plans/{id}`
+- `GET /plans/{id}/events`
 - `POST /plans/{id}/approval`
 - `POST /plans/{id}/progress`
 - `POST /specimens/{id}/release`
+
+每次成功的登记、建方案、审批、进度和放行都会在同一事务中追加一条不可覆盖的有序操作事件，记录提交时刻、动作和关键状态结果；失败、取消或重复拒绝不会产生事件。事件可按标本或方案查询并按全局序号稳定排序。
 
 ## 本地验证
 
@@ -42,6 +46,7 @@ go run ./cmd/workflowcheck --workflow register-specimen
 go run ./cmd/workflowcheck --workflow approve-prep-plan
 go run ./cmd/workflowcheck --workflow log-preparation
 go run ./cmd/workflowcheck --workflow release-for-study
+go run ./cmd/workflowcheck --workflow operation-events
 ```
 
 这些检查会启动临时 HTTP 处理器并调用真实公共路由。

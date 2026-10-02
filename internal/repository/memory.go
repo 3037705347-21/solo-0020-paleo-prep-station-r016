@@ -12,6 +12,7 @@ type state struct {
 	plans     map[string]domain.PrepPlan
 	progress  map[string][]domain.ProgressEntry
 	releases  map[string]domain.ReleaseRecord
+	events    []domain.OperationEvent
 }
 
 type MemoryRepository struct {
@@ -26,6 +27,7 @@ func NewMemory() *MemoryRepository {
 			plans:     make(map[string]domain.PrepPlan),
 			progress:  make(map[string][]domain.ProgressEntry),
 			releases:  make(map[string]domain.ReleaseRecord),
+			events:    make([]domain.OperationEvent, 0),
 		},
 	}
 }
@@ -67,6 +69,7 @@ func cloneMutation(source state) *Mutation {
 	for key, value := range source.releases {
 		copied.releases[key] = value
 	}
+	copied.events = append([]domain.OperationEvent(nil), source.events...)
 	return &Mutation{state: copied}
 }
 
@@ -163,4 +166,45 @@ func (m *Mutation) ReleaseForSpecimen(specimenID string) (domain.ReleaseRecord, 
 
 func (m *Mutation) PutRelease(value domain.ReleaseRecord) {
 	m.state.releases[value.ID] = value
+}
+
+// AppendEvent 把业务操作事件追加到日志末尾并分配全局有序序号。
+// 事件只能追加：仓储不提供修改或删除事件的入口。
+func (m *Mutation) AppendEvent(value domain.OperationEvent) domain.OperationEvent {
+	value.Sequence = int64(len(m.state.events) + 1)
+	m.state.events = append(m.state.events, value)
+	return value
+}
+
+// EventsForSpecimen 按提交顺序返回指定标本的全部操作事件。
+func (m *Mutation) EventsForSpecimen(specimenID string) []domain.OperationEvent {
+	values := make([]domain.OperationEvent, 0)
+	for _, value := range m.state.events {
+		if value.SpecimenID == specimenID {
+			values = append(values, value)
+		}
+	}
+	sortEvents(values)
+	return values
+}
+
+// EventsForPlan 按提交顺序返回指定方案的全部操作事件。
+func (m *Mutation) EventsForPlan(planID string) []domain.OperationEvent {
+	values := make([]domain.OperationEvent, 0)
+	for _, value := range m.state.events {
+		if value.PlanID == planID {
+			values = append(values, value)
+		}
+	}
+	sortEvents(values)
+	return values
+}
+
+func sortEvents(values []domain.OperationEvent) {
+	sort.Slice(values, func(i, j int) bool {
+		if values[i].Sequence == values[j].Sequence {
+			return values[i].ID < values[j].ID
+		}
+		return values[i].Sequence < values[j].Sequence
+	})
 }
